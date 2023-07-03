@@ -1,0 +1,52 @@
+import pandas as pd
+pd.options.plotting.backend = "plotly" #interactive plots will be useful in this context
+import plotly.express as px
+import numpy as np
+import gensim
+from sentence_transformers import SentenceTransformer, util
+import pickle
+import torch
+from sklearn.cluster import KMeans
+from sklearn import metrics
+from sklearn.metrics import pairwise_distances
+from sklearn.metrics import silhouette_samples, silhouette_score
+import umap
+from datetime import datetime
+from sklearn.cluster import DBSCAN
+import math
+
+# autonomous_vehicle_engineer_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv
+# computer_vision_engineer_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv
+# data_scientist_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv
+# machine_learning_engineer_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv
+# python_developer_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv
+# robotics_engineer_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv
+input_file = 'robotics_engineer_dbscan_all_distilroberta_v1_cleaned_by_dbscan.csv'
+
+df=pd.read_csv(input_file)
+
+# 'all-distilroberta-v1_embeddings_autonomous_vehicle_engineer'
+# 'all-distilroberta-v1_embeddings_computer_vision_engineer'
+# 'all-distilroberta-v1_embeddings_data_scientist'
+# 'all-distilroberta-v1_embeddings_machine_learning_engineer'
+# 'all-distilroberta-v1_embeddings_python_developer'
+# 'all-distilroberta-v1_embeddings_robotics_engineer'
+embedding_input_file = 'all-distilroberta-v1_embeddings_robotics_engineer'
+all_distilroberta_v1_embeddings = pickle.load(open(embedding_input_file, 'rb'))
+
+#only keep the embeddings that are in this dataset which is read after the cleaning by DBSCAN step
+l_all_distilroberta_v1_embeddings =[]
+
+#umap_all_distilroberta_v1_embeddings = pickle.load(open('umap_all_distilroberta_v1_embeddings', 'rb'))
+
+for i, row in df.iterrows():
+    l_all_distilroberta_v1_embeddings .append(all_distilroberta_v1_embeddings [row['full_set_row_id']])
+
+# Clustering
+k_31_full = KMeans(n_clusters=31, random_state=0).fit(l_all_distilroberta_v1_embeddings)
+df['cluster_k31_full'] = k_31_full.labels_
+df['cluster_k31_full_str'] = df['cluster_k31_full'].astype(str)
+
+fig = px.scatter(df,'umap1_all_distilroberta_v1','umap2_all_distilroberta_v1', hover_data = ['Skills'], title = "K-Means (K=31) --- Job: Robotics Engineer", color = 'cluster_k31_full_str')
+fig.update_traces(marker=dict(size=3))
+fig.show()
