@@ -1,0 +1,199 @@
+# Clustering model: all-mpnet-base-v2
+
+import pandas as pd
+import gensim
+import kaleido
+import numpy
+import pandas as pd
+pd.options.plotting.backend = "plotly" #interactive plots will be useful in this context
+import plotly.express as px
+import numpy as np
+import gensim
+from sentence_transformers import SentenceTransformer, util
+import pickle
+import torch
+from sklearn.cluster import KMeans
+from sklearn import metrics
+from sklearn.metrics import pairwise_distances
+from sklearn.metrics import silhouette_samples, silhouette_score
+import umap
+from datetime import datetime
+from sklearn.cluster import DBSCAN
+import plotly.graph_objects as go
+
+# Input excel file path
+# Choose one of the following:
+#       "skills_autonomous_vehicle_engineer.xlsx"
+#       "skills_computer_vision_engineer.xlsx"
+#       "skills_data_scientist.xlsx"
+#       "skills_machine_learning_engineer.xlsx"
+#       "skills_python_developer.xlsx"
+#       "skills_robotics_engineer.xlsx"
+inputExcelFile ="skills_data_scientist.xlsx"
+
+# Reading an excel file
+excelFile = pd.read_excel (inputExcelFile)
+
+# Converting excel file into CSV file
+excelFile.to_csv("ResultCsvFile.csv", index = None, header=True)
+
+# Reading and Converting the output csv file into a dataframe object
+df = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+
+row_id = range(0,len(df),1)
+df['row_id'] = row_id
+
+def preprocess_for_sbert(string):
+    string = string.strip("\n.’:")
+    string = string.strip("’")
+    string = string.strip("\\n")
+    string = string.replace("/"," ")
+    return(string)
+
+#Pivots df of vacancy texts into a df of job requirements retrieved from 'list_elements' in vacancy df
+columns = df.columns.values.tolist()
+df_r = pd.DataFrame(columns = ['requirement_raw','requirement_tokenized'] + columns)
+
+row = 0
+while row < len(df):
+    string = str(df.iloc[row]['Skills'])
+    remove = ['\,','[',']','\\n']
+    for char in remove:
+        string.replace(char, '')
+    string = string.strip('\n')
+    splitted = string #list of requirements is stored as string so split on '
+    list = []
+    if len(splitted)>2:
+        requirement_raw = splitted
+        requirement_tokenized = preprocess_for_sbert(splitted)
+        requirement_tokenized = gensim.utils.simple_preprocess(requirement_tokenized)
+        row_list = [requirement_raw,requirement_tokenized, ]
+        for col in columns:
+            row_list = row_list+[df.loc[row,col]]
+        df_r.loc[len(df_r)] = row_list
+    row = row + 1
+
+df = df_r
+
+#Function that takes in a set of vectorized skills and returns vectors reduced to 2 dimensions.
+def umap_embeddings(vectors):
+    reducer = umap.UMAP(random_state=1)
+    umap_embeddings = reducer.fit_transform(vectors)
+    return(umap_embeddings)
+
+print(datetime.now())
+requirements = df['requirement_raw'].tolist()
+models = ['all-mpnet-base-v2']
+for m in models:
+    x=[]
+    model = SentenceTransformer(m)
+    print('encoding '+str(datetime.now()))
+    embeddings = model.encode(requirements)
+    filename = m+'_embeddings'
+    pickle.dump(embeddings, open(filename, 'wb'))
+    print('done'+m+str(datetime.now()))
+
+#Retrieval of embeddings using pickle (unpickling the result of code block above)
+all_mpnet_base_v2_embeddings = pickle.load(open('all-mpnet-base-v2_embeddings', 'rb'))
+
+#Dimensionality reduction using umap
+umap_all_mpnet_base_v2_embeddings = umap_embeddings(all_mpnet_base_v2_embeddings)
+
+#Creating columns in df to visualize results of umap
+df['umap1_all_mpnet_base_v2']= [i[0] for i in umap_all_mpnet_base_v2_embeddings]
+df['umap2_all_mpnet_base_v2']= [i[1] for i in umap_all_mpnet_base_v2_embeddings]
+
+dbscan_all_mpnet_base_v2 = DBSCAN(eps = 0.5, min_samples = 10).fit(umap_all_mpnet_base_v2_embeddings)
+df['cluster_dbscan_all_mpnet_base_v2']=dbscan_all_mpnet_base_v2.labels_
+df['cluster_dbscan_all_mpnet_base_v2_str']= df['cluster_dbscan_all_mpnet_base_v2'].astype(str)
+fig = px.scatter(df,'umap1_all_mpnet_base_v2','umap2_all_mpnet_base_v2', hover_data = ['requirement_raw'], title = "Pre-trained Model: all_mpnet_base_v2",color = 'cluster_dbscan_all_mpnet_base_v2_str')
+fig.update_traces(marker=dict(size=2.5),opacity=0.3)
+
+fig.update_layout(margin=go.layout.Margin(l=1, r=0,b=0, t=45 ),
+                     plot_bgcolor = 'rgb(240,245,255)',
+                     xaxis_title="",
+                     yaxis_title="",
+                     font=dict(size=20),
+                     showlegend = False
+                     #yaxis_tickformat = '%'
+                     )
+fig.show()
+fig.write_image('umap_all_mpnet_base_v2_embeddings.pdf')
+
+# for autonomous vehicle engineer, use eps = 1 and min_samples = 10
+# for computer vision engineer, use eps = 0.4 and min_samples = 10
+# for data scientist, use eps = 0.3 and min_samples = 10
+# for ML engineer, use eps = 0.3 and min_samples = 10
+# for python developer, use eps = 0.3 and min_samples = 10
+# for robotics engineer, use eps = 0.3 and min_samples = 10
+dbscan_all_mpnet_base_v2 = DBSCAN(eps = 0.5, min_samples = 10).fit(umap_all_mpnet_base_v2_embeddings)
+df['cluster_dbscan_all_mpnet_base_v2']=dbscan_all_mpnet_base_v2.labels_
+df['cluster_dbscan_all_mpnet_base_v2_str']= df['cluster_dbscan_all_mpnet_base_v2'].astype(str)
+fig = px.scatter(df,'umap1_all_mpnet_base_v2','umap2_all_mpnet_base_v2', hover_data = ['requirement_raw'], title = "UMAP Analysis of job requirements embeddings from all-mpnet-base-v2 model",color = 'cluster_dbscan_all_mpnet_base_v2_str',labels={
+                     "umap1_all_mpnet_base_v2": "UMAP Dimension 1",
+                     "umap2_all_mpnet_base_v2": "UMAP Dimension 2",
+                     "cluster_dbscan_all_mpnet_base_v2_str": "Cluster"
+                 },)
+fig.update_traces(marker=dict(size=1.4))
+fig.update_layout(margin=go.layout.Margin(l=0, r=0,b=0, t=40),legend=dict(itemsizing='constant'))
+fig.write_image("umap_dbscan.pdf")
+fig.show()
+
+###########################################################################################################################
+# Content Based Cleaning
+
+# Prints top 3 (if top=True) or bottom 3 (if top=False) requirements from each DBSCAN cluster
+def get_cluster_top_n(model, cluster, embeddings, n, top):
+    embeddings_f = embeddings.astype(float)
+    top_k = min(n, len(embeddings))
+
+    # Making an array of means of all umap embeddings in cluster
+    indexes = np.where(model.labels_ == cluster)
+    _list = []
+    index_list = []
+    for index in indexes[0]:
+        index_list.append(index)
+        _list.append(embeddings[index])
+    arr = np.array(_list)
+    mean = arr.mean(axis=0)
+    # print(mean)
+
+    _score_list = []
+    for i, e in enumerate(embeddings):
+        if i in index_list:
+            dist = np.linalg.norm(mean - e)  # Euclidean distance
+            _score_list.append([dist, i])
+
+    score_list = sorted(_score_list, key=lambda x: x[0])  # sort by first dimension (distance)
+
+    if top:  # top results, in cluster, closest to mean
+        for result in score_list[:n]:
+            print("\"" + df.at[result[1], 'requirement_raw'] + "\" Score: " + str(result[0]))
+    else:  # bottom results, in cluster but furthest from mean
+        for result in score_list[-n:]:
+            print("\"" + df.at[result[1], 'requirement_raw'] + "\" Score: " + str(result[0]))
+
+
+for cluster in np.unique(dbscan_all_mpnet_base_v2.labels_):
+    if cluster > 0:
+        print('--------------------------------------------')
+        print("cluster " + str(cluster))
+        print("closest to cluster mean")
+        get_cluster_top_n(dbscan_all_mpnet_base_v2, cluster, umap_all_mpnet_base_v2_embeddings, 3, True)
+        print("furthest from cluster mean")
+        get_cluster_top_n(dbscan_all_mpnet_base_v2, cluster, umap_all_mpnet_base_v2_embeddings, 3, False)
+
+df_cleaned = df.iloc[:,2:14]
+
+if (inputExcelFile == "skills_autonomous_vehicle_engineer.xlsx"):
+    df_cleaned.to_csv('autonomous_vehicle_engineer_dbscan_all_mpnet_base_v2_cleaned_by_dbscan.csv')
+if (inputExcelFile == "skills_computer_vision_engineer.xlsx"):
+    df_cleaned.to_csv('computer_vision_engineer_dbscan_all_mpnet_base_v2_cleaned_by_dbscan.csv')
+if (inputExcelFile == "skills_data_scientist.xlsx"):
+    df_cleaned.to_csv('data_scientist_dbscan_all_mpnet_base_v2_cleaned_by_dbscan.csv')
+if (inputExcelFile == "skills_machine_learning_engineer.xlsx"):
+    df_cleaned.to_csv('machine_learning_engineer_dbscan_all_mpnet_base_v2_cleaned_by_dbscan.csv')
+if (inputExcelFile == "skills_robotics_engineer.xlsx"):
+    df_cleaned.to_csv('robotics_engineer_dbscan_all_mpnet_base_v2_cleaned_by_dbscan.csv')
+if (inputExcelFile == "skills_python_developer.xlsx"):
+    df_cleaned.to_csv('python_developer_dbscan_all_mpnet_base_v2_cleaned_by_dbscan.csv')
