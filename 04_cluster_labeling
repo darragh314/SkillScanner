@@ -1,0 +1,70 @@
+import pandas as pd
+
+# df_k_31_autonomous_vehicle_engineer.xlsx
+# df_k_31_computer_vision_engineer.xlsx
+# df_k_31_data_scientist.xlsx
+# df_k_31_machine_learning_engineer.xlsx
+# df_k_31_python_developer.xlsx
+# df_k_31_robotics_engineer.xlsx
+inputExcelFile ="df_k_31_robotics_engineer.xlsx"
+
+# Reading an excel file
+excelFile = pd.read_excel (inputExcelFile)
+
+# Converting excel file into CSV file
+excelFile.to_csv("ResultCsvFile.csv", index = None, header=True)
+
+# Reading and Converting the output csv file into a dataframe object
+df = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+df_with_labels = df
+
+cluster_indexes = df['cluster_k31_full'].unique()
+
+# Join all skill strings in each cluster
+# Most common bigram in each string will then be assigned as the skill label
+for cluster_id in cluster_indexes:
+    row = 0
+    long_string = " "
+    while row < len(df):
+        if (df.iloc[row]['cluster_k31_full'] == cluster_id):
+            long_string = long_string + " end "
+            long_string = long_string + df.iloc[row]['Skills For Labels']
+        row = row + 1
+    # Extract bigrams out of complete long string
+    words = long_string.split()
+    words_zip = zip(words, words[1:])
+    two_grams_list = [item for item in words_zip]
+    # Count frequency of each bigram
+    count_freq = {}
+    for item in two_grams_list:
+        if item[0] != "end":
+            if item[1] != "end":
+                if item in count_freq:
+                    count_freq[item] += 1
+                else:
+                    count_freq[item] = 1
+    # Sort bigrams in descending order and print most common
+    sorted_two_grams = sorted(count_freq.items(), key=lambda item: item[1], reverse=True)
+    cluster_label = sorted_two_grams[0]
+    print(cluster_label)
+    print(cluster_id)
+    # Run through dataframe again and assign cluster label where relevant
+    new_row = 0
+    while new_row < len(df):
+        if (df.iloc[new_row]['cluster_k31_full'] == cluster_id):
+            df_with_labels.loc[new_row, ['cluster_k31_full_str']] = [cluster_label[0][0] + " " + cluster_label[0][1]]
+        new_row = new_row + 1
+
+df_with_labels.rename(columns = {'cluster_k31_full_str':'Cluster Label'})
+if (inputExcelFile == "df_k_31_autonomous_vehicle_engineer.xlsx"):
+    df_with_labels.to_csv('df_k_31_autonomous_vehicle_engineer_with_cluster_labels.csv')
+if (inputExcelFile == "df_k_31_computer_vision_engineer.xlsx"):
+    df_with_labels.to_csv('df_k_31_computer_vision_engineer_with_cluster_labels.csv')
+if (inputExcelFile == "df_k_31_data_scientist.xlsx"):
+    df_with_labels.to_csv('df_k_31_data_scientist_with_cluster_labels.csv')
+if (inputExcelFile == "df_k_31_machine_learning_engineer.xlsx"):
+    df_with_labels.to_csv('df_k_31_machine_learning_engineer_with_cluster_labels.csv')
+if (inputExcelFile == "df_k_31_python_developer.xlsx"):
+    df_with_labels.to_csv('df_k_31_python_developer_with_cluster_labels.csv')
+if (inputExcelFile == "df_k_31_robotics_engineer.xlsx"):
+    df_with_labels.to_csv('df_k_31_robotics_engineer_with_cluster_labels.csv')
