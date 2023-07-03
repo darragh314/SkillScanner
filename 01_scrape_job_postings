@@ -1,0 +1,161 @@
+import requests
+from bs4 import BeautifulSoup
+import nltk
+import matplotlib.pyplot as plt
+import pickle
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import time
+import random
+from langdetect import detect
+import os
+import pickle
+import gensim
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import torch
+nltk.download('stopwords')
+nltk.download('punkt')
+stop_words = set(stopwords.words('english'))
+
+# Browser header makes web scraping work easier
+headers = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.8}
+
+# Function to scrape indeed.com
+def get_pages(search_term, page_count, country): #returns a list of search links given an input search term
+    pages = []
+    for page_no in range(page_count):
+        page = 'https://'+country+'.indeed.com/jobs?q='+search_term+'&start='+str(page_no*10)
+        pages.append(page)
+    return pages
+
+# This function gets a list of all job postings on one of Indeed search pages
+def get_links(search_link, country): #Takes in one search page and returns all job links on the page
+    links = []
+    page = requests.get(search_link, headers = headers)
+    search_soup = BeautifulSoup(page.text)
+    #print(search_soup)
+    mydivs = search_soup.find_all("div", {"class": "mosaic mosaic-provider-jobcards"})
+    for div in mydivs:
+        classes = div.find_all("a")
+        for c in classes:
+            sub = c.get('data-jk')
+            if isinstance(sub, str):
+                link = 'https://'+country+'.indeed.com/viewjob?jk='+sub
+            if link not in links:
+                links.append(link)
+    return links
+
+# This function takes in a list of urls, created by get_links(). It visits each link and saves the response in a txt file.
+def get_requests(urls): #Takes in a job link and saves request.text to file
+    for url in urls:
+        captcha = True
+        while captcha:
+            response = requests.get(url, headers = headers)
+        
+            jk = url[33:]
+            path = "..\datasets\requests\\"+jk
+        
+            soup = BeautifulSoup(response.text)
+            title = soup.find("title")
+        
+            if "hCaptcha solve page" not in title: # not a captcha
+                captcha = False
+            else:
+                time.sleep(1200)
+            
+        with open(path, "w") as file:
+            file.write(response.text)
+            time.sleep(10+random.uniform(-1,1)) #behave a bit like human
+
+# A set of job postings is scraped from the web for each job, it is stored in a set of response text files.
+jobs = ['Autonomous Vehicle Engineer', 'Data Scientist', 'Computer Vision Engineer', 'Machine Learning Engineer', 'Python Developer', 'Robotics Engineer']
+countries = ['se','no','nl','de','be','es','it','ch','fr','uk','pt','fi','lu','at']
+link_list = []
+for job in jobs:
+  for country in countries:
+      pages = get_pages(job, 10, country)
+      for page in pages:
+          links = get_links(page, country)
+          link_list.append(links)
+          time.sleep(10+random.uniform(-1,1)) #behave a bit like human
+  with open("link_list.txt", "wb") as fp:
+      pickle.dump(link_list, fp)
+
+for list in link_list:
+    get_requests(list)
+
+# Retrieving a dataset from the acquired http responses
+def request_to_row(request):
+    with open("../datasets/requests/"+ request) as file:
+        text = file.read()
+        soup = BeautifulSoup(text)  
+        full_text = soup.find("div",{"id": "jobDescriptionText"}).text
+        if(detect(full_text) != 'en'): #Only parse English job postings
+            return 
+        
+        timestamp = None
+        content = []
+        title_location = soup.find("title").text
+        title = title_location.split("-")[0]
+        location = title_location.split("-")[1]
+        url = soup.find_all("meta", {"id": "indeed-share-url"})
+        url = str(url[0])[15:-25]
+        
+        country = url[8:10]
+
+        list_elements = []
+    
+        divs = soup.find_all("div",{"id": "jobDescriptionText"})
+        for div in divs:
+            uls = div.find_all("ul")
+            for ul in uls:
+                for li in ul.find_all('li'):
+                    list_elements.append(li.text)
+    return [timestamp,url,title,location,country,full_text,list_elements]
+
+for job in jobs:
+  dir = '../datasets/requests'
+  df = pd.DataFrame(columns = ["dt","url","title","location","country","full_text","list_elements"])
+  for filename in os.listdir(dir):
+      row_list = request_to_row(filename)
+      df.loc[len(df)] = row_list 
+  df_.to_csv("../datasets/requests/" + job + "_job_postings")
+
+# Finding Skills in a Dataset of Job Postings
+for job in jobs:
+  df=pd.read_csv('../datasets/requests/" + job + "_job_postings.csv')
+  row_id = range(0,len(df),1)
+  df['row_id'] = row_id
+  def preprocess_for_sbert(string):
+      string = string.strip("\n.’:")
+      string = string.strip("’")
+      string = string.strip("\\n")
+      string = string.replace("/"," ")
+      return(string)
+  #Pivots df of vacancy texts into a df of job requirements retrieved from 'list_elements' in vacancy df
+  columns = df.columns.values.tolist()
+  df_r = pd.DataFrame(columns = ['requirement_raw','requirement_tokenized']+columns)
+  for index, row in df.iterrows():
+      string = str(row['list_elements'])
+      remove = ['\,','[',']','\\n']
+      for char in remove:
+          string.replace(char, '')
+      string = string.strip('\n')
+      splitted = string.split('\'') #list of requirements is stored as string so split on '
+      list = []
+      for item in splitted:
+          if len(item)>2:
+              requirement_raw = item
+              requirement_tokenized = preprocess_for_sbert(item)
+              requirement_tokenized = gensim.utils.simple_preprocess(requirement_tokenized)
+              row_list = [requirement_raw,requirement_tokenized]
+              for col in columns:
+                  row_list = row_list+[df.loc[index,col]]          
+              df_r.loc[len(df_r)] = row_list 
+
+
