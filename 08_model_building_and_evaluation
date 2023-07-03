@@ -1,0 +1,478 @@
+# 1 Adaboost
+
+import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+# Build the AdaBoost model
+learning_rates = [0.001, 0.01, 0.1]
+results_acc = []
+results_f = []
+
+for rate in learning_rates:
+
+    # Load the data from the excel file
+    data = pd.read_excel("Labeled Data Trial 3 (167 pages).xlsx")
+
+    # Extract the features and target variable
+    features = data.iloc[:, 4:9]
+    target = data.iloc[:, 0]
+
+    # Split the data into training and testing sets with stratified sampling
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+    for train_index, test_index in sss.split(features, target):
+        X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+        y_train, y_test = target.iloc[train_index], target.iloc[test_index]
+
+    # Scale the features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    pca = PCA(n_components=5)
+    pca_components_train = pca.fit_transform(X_train_scaled)
+    pca_components_test = pca.transform(X_test_scaled)
+
+    tree_model = DecisionTreeClassifier(max_depth=3)
+    adaboost_model = AdaBoostClassifier(base_estimator=tree_model, n_estimators=50, learning_rate=rate,
+                                        algorithm='SAMME.R', random_state=0)
+
+    # Fit the model with the full training set
+    adaboost_model.fit(pca_components_train, y_train)
+
+    # Predict on test set
+    y_pred = adaboost_model.predict(pca_components_test)
+
+    # Calculate the accuracy and f-score of the classifier
+    accuracy = accuracy_score(y_test, y_pred)
+    f_score = f1_score(y_test, y_pred)
+    print("Learning Rate:", rate)
+    print("Accuracy:", accuracy)
+    print("F-score:", f_score)
+    results_acc.append(accuracy)
+    results_f.append(f_score)
+
+# Plot the results
+fig, ax = plt.subplots()
+x_pos = range(len(learning_rates))
+ax.plot(x_pos, results_acc, 'bs', label='Accuracy')
+ax.plot(x_pos, results_f, 'o', color='orange', label='F-score')
+ax.set_xticks(x_pos)
+ax.set_xticklabels(learning_rates)
+ax.set_ylim(0.7, 1.0)
+ax.legend(loc='lower right')
+
+# Add values to the top of the bars
+for i, v in enumerate(results_acc):
+    ax.text(i - 0.1, v + 0.01, str(round(v, 3)))
+    ax.text(i - 0.1, results_f[i] - 0.02, str(round(results_f[i], 3)))
+    # Adjust the y-coordinate of the F-score text to prevent overlapping with Accuracy text
+
+plt.xlabel("AdaBoost Learning Rate")
+plt.ylabel("Accuracy and F-score")
+plt.legend()
+plt.show()
+
+# 2 XGBoost
+
+import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.tree import DecisionTreeClassifier
+import xgboost as xgb
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import StratifiedShuffleSplit, learning_curve
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load the data from the excel file
+data = pd.read_excel("labeled_data_250.xlsx")
+
+# Extract the features and target variable
+features = data.iloc[:, 4:9]
+target = data.iloc[:, 0]
+
+# Split the data into training and testing sets with stratified sampling
+sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+for train_index, test_index in sss.split(features, target):
+    X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+    y_train, y_test = target.iloc[train_index], target.iloc[test_index]
+
+# Scale the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+pca = PCA(n_components=5)
+pca_components_train = pca.fit_transform(X_train_scaled)
+pca_components_test = pca.transform(X_test_scaled)
+
+# Train the Adaboost decision tree model
+tree_model = DecisionTreeClassifier(max_depth=3)
+xgb_model = xgb.XGBClassifier(base_estimator=tree_model, n_estimators=50, learning_rate=2.0, algorithm='SAMME.R', random_state=0)
+xgb_model.fit(pca_components_train, y_train)
+
+# Visualize the learning curve
+train_sizes, train_scores, test_scores = learning_curve(xgb_model, pca_components_train, y_train, cv=5)
+train_mean = np.mean(train_scores, axis=1)
+train_std = np.std(train_scores, axis=1)
+test_mean = np.mean(test_scores, axis=1)
+test_std = np.std(test_scores, axis=1)
+
+plt.figure()
+plt.title("Learning Curve")
+plt.xlabel("Training Examples")
+plt.ylabel("Accuracy")
+plt.ylim(0.8, 1.1)
+plt.grid()
+plt.plot(train_sizes, test_mean, 'x-', color="g", label="XG Boost")
+plt.legend(loc="best")
+plt.show()
+
+# Predict on test set
+y_pred = xgb_model.predict(pca_components_test)
+
+# Calculate the accuracy of the classifier
+accuracy = accuracy_score(y_test, y_pred)
+f_score = f1_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+print("F-score:", f_score)
+
+# 3 Gradient Boost
+
+import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+# Build the AdaBoost model
+learning_rates = [0.001, 0.01, 0.1]
+results_acc = []
+results_f = []
+
+for rate in learning_rates:
+
+    # Load the data from the excel file
+    data = pd.read_excel("Labeled Data Trial 3 (167 pages).xlsx")
+
+    # Extract the features and target variable
+    features = data.iloc[:, 4:9]
+    target = data.iloc[:, 0]
+
+    # Split the data into training and testing sets with stratified sampling
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+    for train_index, test_index in sss.split(features, target):
+        X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+        y_train, y_test = target.iloc[train_index], target.iloc[test_index]
+
+    # Scale the features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    pca = PCA(n_components=5)
+    pca_components_train = pca.fit_transform(X_train_scaled)
+    pca_components_test = pca.transform(X_test_scaled)
+
+    tree_model = DecisionTreeClassifier(max_depth=3)
+    adaboost_model = GradientBoostingClassifier(n_estimators=50, learning_rate=rate,
+                                        random_state=0)
+
+    # Fit the model with the full training set
+    adaboost_model.fit(pca_components_train, y_train)
+
+    # Predict on test set
+    y_pred = adaboost_model.predict(pca_components_test)
+
+    # Calculate the accuracy and f-score of the classifier
+    accuracy = accuracy_score(y_test, y_pred)
+    f_score = f1_score(y_test, y_pred)
+    print("Learning Rate:", rate)
+    print("Accuracy:", accuracy)
+    print("F-score:", f_score)
+    results_acc.append(accuracy)
+    results_f.append(f_score)
+
+# Plot the results
+fig, ax = plt.subplots()
+x_pos = range(len(learning_rates))
+ax.plot(x_pos, results_acc, 'bs', label='Accuracy')
+ax.plot(x_pos, results_f, 'o',  color='orange', label='F-score')
+ax.set_xticks(x_pos)
+ax.set_xticklabels(learning_rates)
+ax.set_ylim(0.7, 1.0)
+
+# Add values to the top of the bars
+for i, v in enumerate(results_acc):
+    ax.text(i - 0.1, v + 0.01, str(round(v, 3)))
+    ax.text(i - 0.1, results_f[i] - 0.02, str(round(results_f[i], 3)))
+    # Adjust the y-coordinate of the F-score text to prevent overlapping with Accuracy text
+
+plt.xlabel("Gradient Boost Learning Rate")
+plt.ylabel("Accuracy and F-score")
+plt.legend()
+plt.show()
+
+# 4 MLP
+
+import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Load the data from the excel file
+data = pd.read_excel("labeled_data_250.xlsx")
+
+# Extract the features and target variable
+X = data.iloc[:, 4:9]
+y = data.iloc[:, 0]
+
+# Split the data into training and testing sets with stratified sampling
+sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+for train_index, test_index in sss.split(X, y):
+    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+# Scale the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Train MLP models with one, two, and three hidden layers
+models = []
+for n in range(1, 10):
+    mlp_model = MLPClassifier(hidden_layer_sizes=(100,) * n, activation='relu', solver='adam', alpha=0.0001, batch_size='auto', learning_rate='constant', learning_rate_init=0.001, power_t=0.5, max_iter=10, shuffle=True, random_state=0, tol=0.0001, verbose=False, warm_start=False, momentum=0.9, nesterovs_momentum=True, early_stopping=False, validation_fraction=0.1, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
+    mlp_model.fit(X_train_scaled, y_train)
+    models.append(mlp_model)
+
+# Predict on test set and calculate accuracies and f1-scores
+accuracies = []
+f1_scores = []
+for mlp_model in models:
+    y_pred = mlp_model.predict(X_test_scaled)
+    accuracy = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+
+# Plot the accuracies and f1-scores
+plt.plot(range(1, 10), accuracies, marker='o', label='Accuracy')
+plt.plot(range(1, 10), f1_scores, marker='x', label='F1-score')
+plt.ylim(0.65, 1.0)
+plt.xlabel('Number of MLP Hidden Layers')
+plt.ylabel('Accuracy and F-score')
+plt.legend(loc = 'lower right')
+
+# Add accuracy and f1-score values above each point
+for i, (acc, f1) in enumerate(zip(accuracies, f1_scores)):
+    plt.text(i+0.6, acc+0.005, f'{acc:.4f}')
+    plt.text(i+0.6, f1+0.005, f'{f1:.4f}')
+
+plt.show()
+
+# 5 RNN
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.preprocessing import StandardScaler
+from keras.models import Sequential
+from keras.layers import Dense, SimpleRNN
+
+# Load the data from the excel file
+data = pd.read_excel("Labeled Data Trial 3 (167 pages).xlsx")
+
+# Extract the features and target variable
+features = data.iloc[:, 4:9]
+target = data.iloc[:, 0]
+
+# Check the unique values in the target variable
+print(target.unique())
+
+# Split the data into training and testing sets with stratified sampling
+sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+for train_index, test_index in sss.split(features, target):
+    X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+    y_train, y_test = target.iloc[train_index], target.iloc[test_index]
+
+# Scale the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Reshape the data for RNN input
+X_train_reshaped = X_train_scaled.reshape(X_train_scaled.shape[0], X_train_scaled.shape[1], 1)
+X_test_reshaped = X_test_scaled.reshape(X_test_scaled.shape[0], X_test_scaled.shape[1], 1)
+
+# Build the RNN model
+mechanisms = ['relu', 'tanh', 'sigmoid']
+results_acc = []
+results_f = []
+for mechanism in mechanisms:
+    model = Sequential()
+    model.add(SimpleRNN(12, activation=mechanism, input_shape=(X_train_reshaped.shape[1], 1)))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+    # Display the model summary
+    model.summary()
+
+    # Fit the model with the full training set
+    history = model.fit(X_train_reshaped, y_train, epochs=10, batch_size=32)
+
+    # Predict on test set
+    y_pred = model.predict(X_test_reshaped)
+    y_pred = (y_pred > 0.5)
+
+    # Calculate the accuracy and f-score of the classifier
+    accuracy = accuracy_score(y_test, y_pred)
+    f_score = f1_score(y_test, y_pred)
+    print("Mechanism:", mechanism)
+    print("Accuracy:", accuracy)
+    print("F-score:", f_score)
+
+# Plot the results
+fig, ax = plt.subplots()
+ax.plot(mechanisms, results_acc, 'bs', label='Accuracy')
+ax.plot(mechanisms, results_f, 'o',  color='orange', label='F-score')
+ax.set_ylim(0.7, 1.0)
+
+# Add values to the top of the bars
+for i, v in enumerate(results_acc):
+    ax.text(i - 0.1, v + 0.01, str(round(v, 3)))
+    ax.text(i - 0.1, results_f[i] - 0.02, str(round(results_f[i], 3)))
+    # Adjust the y-coordinate of the F-score text to prevent overlapping with Accuracy text
+
+# plt.title("Effect of Recurrence Mechanism on RNN Accuracy and F-score")
+plt.xlabel("Recurrence Mechanism")
+plt.ylabel("Accuracy and F-score")
+plt.legend()
+plt.show()
+
+# 6 SVM
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
+from sklearn.svm import SVC
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# Load the data from the excel file
+data = pd.read_excel("labeled_data_250.xlsx")
+
+# Extract the features and target variable
+features = data.iloc[:, 4:9]
+target = data.iloc[:, 0]
+
+# Split the data into training and testing sets with stratified sampling
+sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+for train_index, test_index in sss.split(features, target):
+    X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+    y_train, y_test = target.iloc[train_index], target.iloc[test_index]
+
+# Scale the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Perform PCA (can use 3 components to visualize the decision boundary)
+pca = PCA(n_components=5)
+pca_components_train = pca.fit_transform(X_train_scaled)
+pca_components_test = pca.transform(X_test_scaled)
+
+# Train the SVM model
+svm_model = SVC(kernel='linear')
+svm_model.fit(pca_components_train, y_train)
+
+# Predict on test set
+y_pred = svm_model.predict(pca_components_test)
+
+# Calculate the accuracy of the classifier
+accuracy = accuracy_score(y_test, y_pred)
+f_score = f1_score(y_test, y_pred)
+print("Accuracy linear:", accuracy)
+print("F-score linear:", f_score)
+
+# Train the SVM model
+svm_model = SVC(kernel='poly')
+svm_model.fit(pca_components_train, y_train)
+
+# Predict on test set
+y_pred = svm_model.predict(pca_components_test)
+
+# Calculate the accuracy of the classifier
+accuracy = accuracy_score(y_test, y_pred)
+f_score = f1_score(y_test, y_pred)
+print("Accuracy polynomial:", accuracy)
+print("F-score polynomial:", f_score)
+
+# Train the SVM model
+svm_model = SVC(kernel='sigmoid')
+svm_model.fit(pca_components_train, y_train)
+
+# Predict on test set
+y_pred = svm_model.predict(pca_components_test)
+
+# Calculate the accuracy of the classifier
+accuracy = accuracy_score(y_test, y_pred)
+f_score = f1_score(y_test, y_pred)
+print("Accuracy sigmoid:", accuracy)
+print("F-score sigmoid:", f_score)
+
+
+
+
+#####################################3
+
+# Build the SVM model
+mechanisms = ['linear', 'poly', 'sigmoid']
+results_acc = []
+results_f = []
+for mechanism in mechanisms:
+    # Train the SVM model
+    svm_model = SVC(kernel=mechanism)
+    svm_model.fit(pca_components_train, y_train)
+
+    # Predict on test set
+    y_pred = svm_model.predict(pca_components_test)
+
+    # Calculate the accuracy and f-score of the classifier
+    accuracy = accuracy_score(y_test, y_pred)
+    f_score = f1_score(y_test, y_pred)
+    print("Mechanism:", mechanism)
+    print("Accuracy:", accuracy)
+    print("F-score:", f_score)
+    results_acc.append(accuracy)
+    results_f.append(f_score)
+
+# Plot the results
+fig, ax = plt.subplots()
+ax.plot(mechanisms, results_acc, 'bs', label='Accuracy')
+ax.plot(mechanisms, results_f, 'o',  color='orange', label='F-score')
+ax.set_ylim(0.6, 1.0)
+# Add values to the top of the bars
+for i, v in enumerate(results_acc):
+    ax.text(i - 0.1, v + 0.01, str(round(v, 3)))
+    ax.text(i - 0.1, results_f[i] - 0.02, str(round(results_f[i], 3)))
+    # Adjust the y-coordinate of the F-score text to prevent overlapping with Accuracy text
+
+# plt.title("Effect of Recurrence Mechanism on RNN Accuracy and F-score")
+plt.xlabel("SVM Kernal Function")
+plt.ylabel("Accuracy and F-score")
+plt.legend()
+plt.show()
