@@ -1,0 +1,605 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import PyPDF2
+import re
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+nltk.download('punkt')
+nltk.download('wordnet')
+
+import numpy as np
+def getnums(s, e,i):
+   return (np.arange(s, e,i))
+
+# df_k_31_autonomous_vehicle_engineer_with_mean_sentences.xlsx
+# df_k_31_computer_vision_engineer_with_mean_sentences.xlsx
+# df_k_31_data_scientist_with_mean_sentences.xlsx
+# df_k_31_machine_learning_engineer_with_mean_sentences.xlsx
+# df_k_31_python_developer_with_mean_sentences.xlsx
+# df_k_31_robotics_engineer_with_mean_sentences.xlsx
+
+def compare_skills(job, chapter_title, pdf, pages_analyzed, skill_bigram, df_labeled_data, labeled_row_index):
+    ############################# read in job skills ###########################################
+    if (job == 'Autonomous Vehicle Engineer'):
+        inputExcelFile = "df_k_31_autonomous_vehicle_engineer_with_mean_sentences.xlsx"
+    if (job == 'Computer Vision Engineer'):
+        inputExcelFile = "df_k_31_computer_vision_engineer_with_mean_sentences.xlsx"
+    if (job == 'Data Scientist'):
+        inputExcelFile = "df_k_31_data_scientist_with_mean_sentences.xlsx"
+    if (job == 'Machine Learning Engineer'):
+        inputExcelFile = "df_k_31_machine_learning_engineer_with_mean_sentences.xlsx"
+    if (job == 'Python Developer'):
+        inputExcelFile = "df_k_31_python_developer_with_mean_sentences.xlsx"
+    if (job == 'Robotics Engineer'):
+        inputExcelFile = "df_k_31_robotics_engineer_with_mean_sentences.xlsx"
+
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+
+    # Reading and Converting the output csv file into a dataframe object
+    df_job_skills = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+
+    ############################ read in associated bigramd and keywords #######################3
+    if (job == 'Autonomous Vehicle Engineer'):
+        inputExcelFile = "all_skills_buzzwords_autonomous_vehicle_engineer.xlsx"
+    if (job == 'Computer Vision Engineer'):
+        inputExcelFile = "all_skills_buzzwords_computer_vision_engineer.xlsx"
+    if (job == 'Data Scientist'):
+        inputExcelFile = "all_skills_buzzwords_data_scientist.xlsx"
+    if (job == 'Machine Learning Engineer'):
+        inputExcelFile = "all_skills_buzzwords_machine_learning_engineer.xlsx"
+    if (job == 'Python Developer'):
+        inputExcelFile = "all_skills_buzzwords_python_developer.xlsx"
+    if (job == 'Robotics Engineer'):
+        inputExcelFile = "all_skills_buzzwords_robotics_engineer.xlsx"
+
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+
+    # Reading and Converting the output csv file into a dataframe object
+    df_buzzwords = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+
+    ############################################# read in stat files ##################
+    # 'df_k_31_autonomous_vehicle_engineer_stats.xlsx
+    # 'df_k_31_computer_vision_engineer_stats.xlsx
+    # 'df_k_31_data_scientist_stats.xlsx
+    # 'df_k_31_machine_learning_engineer_stats.xlsx
+    # 'df_k_31_python_developer_stats.xlsx
+    # 'df_k_31_robotics_engineer_stats.xlsx
+    if (job == 'Autonomous Vehicle Engineer'):
+        inputExcelFile = "df_k_31_autonomous_vehicle_engineer_stats.xlsx"
+    if (job == 'Computer Vision Engineer'):
+        inputExcelFile = "df_k_31_computer_vision_engineer_stats.xlsx"
+    if (job == 'Data Scientist'):
+        inputExcelFile = "df_k_31_data_scientist_stats.xlsx"
+    if (job == 'Machine Learning Engineer'):
+        inputExcelFile = "df_k_31_machine_learning_engineer_stats.xlsx"
+    if (job == 'Python Developer'):
+        inputExcelFile = "df_k_31_python_developer_stats.xlsx"
+    if (job == 'Robotics Engineer'):
+        inputExcelFile = "df_k_31_robotics_engineer_stats.xlsx"
+
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+
+    ############################################ chapter titles ##################################################
+    from transformers import AutoTokenizer, AutoModel
+    import torch
+
+    skill_index = np.where(df_skill_stats['Skill'] == skill_bigram)[0][0]
+
+    sentences = [chapter_title]
+    mean_sentences = df_job_skills.iloc[skill_index]['Mean Sentence']
+    index = 1
+    sentences.insert(index, mean_sentences)
+
+    tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/bert-base-nli-mean-tokens')
+    model = AutoModel.from_pretrained('sentence-transformers/bert-base-nli-mean-tokens')
+
+    tokens = {'input_ids': [], 'attention_mask': []}
+
+    for sentence in sentences:
+        # encode each sentence and append to dictionary
+        new_tokens = tokenizer.encode_plus(sentence, max_length=512,
+                                           truncation=True, padding='max_length',
+                                           return_tensors='pt')
+        tokens['input_ids'].append(new_tokens['input_ids'][0])
+        tokens['attention_mask'].append(new_tokens['attention_mask'][0])
+
+    # reformat list of tensors into single tensor
+    tokens['input_ids'] = torch.stack(tokens['input_ids'])
+    tokens['attention_mask'] = torch.stack(tokens['attention_mask'])
+
+    outputs = model(**tokens)
+
+    embeddings = outputs.last_hidden_state
+
+    attention_mask = tokens['attention_mask']
+    mask = attention_mask.unsqueeze(-1).expand(embeddings.size()).float()
+    masked_embeddings = embeddings * mask
+    summed = torch.sum(masked_embeddings, 1)
+    summed_mask = torch.clamp(mask.sum(1), min=1e-9)
+    mean_pooled = summed / summed_mask
+
+    #################################################
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    # convert from PyTorch tensor to numpy array
+    mean_pooled = mean_pooled.detach().numpy()
+
+    title_scores = cosine_similarity([mean_pooled[0]], mean_pooled[1:])
+    # matching_indexes = np.where(title_scores >= 0.64)
+    # pdf.set_font('Arial', '', 10)
+    # pdf.ln(10)
+    # if (len(matching_indexes[1]) > 0):
+    #     chapter_title_matching = True
+        # for entry in matching_indexes[1]:
+        #     pdf.write(5, "This section will help you to learn the market skill:")
+        #     pdf.ln(5)
+        #     pdf.set_font('Arial', 'B', 10)
+        #     pdf.write(5, df_job_skills.iloc[entry]['Cluster Label'])
+        #     pdf.set_font('Arial', '', 10)
+        #     pdf.ln(5)
+        #     pdf.write(5, "The market skill '" + df_job_skills.iloc[entry]['Cluster Label'] + "' is required in " + str( df_skill_stats.iloc[(np.where(df_skill_stats['Skill'] == df_job_skills.iloc[entry]['Cluster Label'])[0][0])]['Hits'] ) + "% of " + job + " jobs")
+        #     pdf.write(5, "------------------------------------------------------------------------------------------------------------------------------")
+        #     pdf.ln(5)
+    # pdf.set_font('Arial', '', 10)
+    # pdf.write(5, "market skill: ")
+    # pdf.set_font('Arial', 'B', 10)
+    # pdf.write(5, str(df_skill_stats.iloc[skill_index]['Skill']))
+    # pdf.ln(5)
+    # pdf.set_font('Arial', '', 10)
+    # pdf.write(5, "----------------------------------------------------------------------------------------------------------------------------------")
+    # pdf.ln(5)
+    # pdf.write(5, "the market skill '" + df_skill_stats.iloc[skill_index]['Skill'] + "' is required in " + str( df_skill_stats.iloc[(np.where(df_skill_stats['Skill'] == df_job_skills.iloc[skill_index]['Cluster Label'])[0][0])]['Hits'] ) + "% of " + job + " jobs")
+
+
+    row = 0
+    print("------------------------------------------------------------------------------------------------------------------------------")
+    print("Job: " + job)
+    print("")
+    string_ = "Chapter Title: " + str(chapter_title) + " --- " + " Market Skill: " + df_job_skills.iloc[skill_index]['Cluster Label'] + " --- " + " score: " + str(title_scores[0][row])
+    print("Chapter Title: " + str(chapter_title))
+    print("Sentence Closest to Cluster Center: " + str(mean_sentences))
+    print("cosine similarity score: " + str(title_scores[0][row]))
+    print("")
+    ################################### skill bigram frequency ####################################################
+    # check given pages for frequency of skill bigram
+    import PyPDF2
+    import re
+
+    # Function to extract pages with a given skill
+    def find_skill_pages(pdf_file, skill, start_page, end_page):
+        # Open PDF file
+        pdf_reader = PyPDF2.PdfFileReader(open(pdf_file, 'rb'))
+        # Initialize variables
+        pages_with_skill = []
+        skill_bigram = " ".join(skill)
+        # Iterate over pages within the specified range
+        num_matches = 0
+        for page_num in range(start_page-1, end_page):
+            page = pdf_reader.getPage(page_num)
+            page_text = page.extractText().upper()
+            # Search for skill bigram in page text
+            for match in re.finditer(skill_bigram, page_text):
+                num_matches = num_matches + 1
+                start = match.start()
+                end = match.end()
+                # Get sentence that contains the skill bigram
+                match = re.search(r"[A-Z][^\.!?]*" + skill_bigram + "[^\.!?]*[\.!?]", page_text[start - 50:end + 50])
+                if match:
+                    sentence = match.group(0)
+                    pages_with_skill.append((page_num + 1, sentence))
+        #return pages_with_skill
+        return num_matches
+
+    # Test the function
+    pdf_file = course_book_pdf
+    skill_bigram = [skill_bigram]
+    counter = 0
+    for part in skill_bigram:
+        part = part.upper()
+        skill_bigram[counter] = part
+        counter = counter + 1
+    skill_bigram_hits = find_skill_pages(pdf_file, skill_bigram, start_page_inclusive, end_page_inclusive)
+    print("skill bigram '" + str(skill_bigram[0]) + "' was hit " + str(skill_bigram_hits) + " number of times")
+    print("")
+    # pdf.write(5, "the skill bigram '" + str(skill_bigram[0]) + "' appears " + str(skill_bigram_hits) + " number of times in this section")
+    # pdf.ln(5)
+
+
+
+    #################################### read in buzzword ########################################################
+    # all_skills_buzzwords_autonomous_vehicle_engineer.xlsx
+    # all_skills_buzzwords_computer_vision_engineer.xlsx
+    # all_skills_buzzwords_data_scientist.xlsx
+    # all_skills_buzzwords_machine_learning_engineer.xlsx
+    # all_skills_buzzwords_python_developer.xlsx
+    # all_skills_buzzwords_robotics_engineer.xlsx
+    if (job == 'Autonomous Vehicle Engineer'):
+        inputExcelFile = "all_skills_buzzwords_autonomous_vehicle_engineer.xlsx"
+    if (job == 'Computer Vision Engineer'):
+        inputExcelFile = "all_skills_buzzwords_computer_vision_engineer.xlsx"
+    if (job == 'Data Scientist'):
+        inputExcelFile = "all_skills_buzzwords_data_scientist.xlsx"
+    if (job == 'Machine Learning Engineer'):
+        inputExcelFile = "all_skills_buzzwords_machine_learning_engineer.xlsx"
+    if (job == 'Python Developer'):
+        inputExcelFile = "all_skills_buzzwords_python_developer.xlsx"
+    if (job == 'Robotics Engineer'):
+        inputExcelFile = "all_skills_buzzwords_robotics_engineer.xlsx"
+
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+
+    # Reading and Converting the output csv file into a dataframe object
+    df_buzzwords = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+
+    ####################################### buzzword frequency ###################################################
+    # Iterate over column titles
+    total_buzzword_hits = 0
+    unique_buzzwords_hit = 0
+    for col in df_buzzwords.columns:
+        # Check if column title matches search string
+        if col == skill_bigram[0].lower():
+            # Iterate over entries in column
+            for entry in df_buzzwords[col]:
+                skill_bigram = [entry]
+                counter = 0
+                for part in skill_bigram:
+                    part = part.upper()
+                    skill_bigram[counter] = part
+                    counter = counter + 1
+                skill_buzzword_hits = find_skill_pages(pdf_file, skill_bigram, start_page_inclusive, end_page_inclusive)
+                total_buzzword_hits = total_buzzword_hits + skill_buzzword_hits
+                if (skill_buzzword_hits > 0):
+                    unique_buzzwords_hit = unique_buzzwords_hit + 1
+                print("buzzwords '" + str(skill_bigram[0]) + "' was hit " + str(skill_buzzword_hits) + " number of times")
+                print("")
+                # pdf.write(5, "the buzzwords '" + str(skill_bigram[0]) + "' appears " + str(
+                #     skill_buzzword_hits) + " number of times in this section")
+                # pdf.ln(5)
+
+    print("--------------------------------------------------------------------------------------------------")
+    # pdf.write(5,
+    #               "----------------------------------------------------------------------------------------------------------------------------------")
+
+    ################################### semantic analysis ##################################################
+    import PyPDF2
+    from nltk.tokenize import word_tokenize
+    from nltk.stem import WordNetLemmatizer
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    def extract_text_from_pdf(pdf_file, page_range):
+        pdf_reader = PyPDF2.PdfFileReader(pdf_file)
+        text = ''
+        page_texts = []
+        for page_num in range(page_range[0] - 1, page_range[1]):
+            page = pdf_reader.getPage(page_num)
+            page_text = page.extractText()
+            page_texts.append(page_text)
+            text += page_text
+        return page_texts
+
+    def semantic_analysis(texts, skill_sentence):
+        skill_tokens = word_tokenize(skill_sentence)
+        lemmatizer = WordNetLemmatizer()
+        skill_lemmas = [lemmatizer.lemmatize(token.lower()) for token in skill_tokens]
+
+        tfidf_vectorizer = TfidfVectorizer()
+        skill_tfidf = tfidf_vectorizer.fit_transform([skill_sentence])
+        text_tfidf = tfidf_vectorizer.transform(texts)
+
+        match_scores = []
+        for i, tfidf in enumerate(text_tfidf):
+            match_score = cosine_similarity(tfidf, skill_tfidf)
+            match_scores.append((i, match_score))
+        match_scores.sort(key=lambda x: x[1], reverse=True)
+        return match_scores
+
+    pdf_file = open(course_book_pdf, 'rb')
+    mean_sentence = df_job_skills.iloc[skill_index]['Mean Sentence']
+    # skill_sentence = 'knowledge of autonomous systems and robots'
+    page_range = (start_page_inclusive, end_page_inclusive)
+
+    page_texts = extract_text_from_pdf(pdf_file, page_range)
+    match_scores = semantic_analysis(page_texts, mean_sentence)
+
+    if len([ms for ms in match_scores if ms[1] >= 0.8]) >= 1:
+        # print(f'The desired skill can be learned from the specified PDF pages.')
+        # print('The top section of text that best helps to learn the skill is:')
+        for i, (page_num, match_score) in enumerate(match_scores[:1]):
+            max_semantic_score = match_score[0][0]
+    else:
+        # print(f'The desired skill can be learned from the specified PDF pages.')
+        # print('The top section of text that best helps to learn the skill is:')
+        for i, (page_num, match_score) in enumerate(match_scores[:1]):
+            max_semantic_score = match_score[0][0]
+
+
+    ##########################################################################################################
+    # DECISION
+    #if (title_scores[0][0] > 0.85 or skill_bigram_hits >= 10 or (unique_buzzwords_hit >= 6) or max_semantic_score > 0.9):
+    #     pdf.ln(5)
+    #     pdf.write(5,
+    #               "----------------------------------------------------------------------------------------------------------------------------------")
+    #     pdf.ln(5)
+    #     pdf.set_font('Arial', 'B', 10)
+    #     pdf.write(5, "DECISION: this section CAN help you to learn the market skill: ")
+    #     pdf.set_font('Arial', 'B', 10)
+    #     pdf.write(5, str(df_skill_stats.iloc[skill_index]['Skill']))
+    #     pdf.set_font('Arial', '', 10)
+    #     pdf.ln(5)
+    #     pdf.write(5, "title cosine similarity score: " + str(title_scores[0][0]))
+    #     pdf.ln(5)
+    #     pdf.write(5, "skill bigram hits: " + str(skill_bigram_hits))
+    #     pdf.ln(5)
+    #     pdf.write(5, "unique buzzwords hit (out of 15): " + str(unique_buzzwords_hit))
+    #     pdf.ln(5)
+    #     pdf.write(5, "max semantic score of a single page: " + str(max_semantic_score))
+    # else:
+    #     pdf.ln(5)
+    #     pdf.write(5,
+    #               "----------------------------------------------------------------------------------------------------------------------------------")
+    #     pdf.ln(5)
+    #     pdf.set_font('Arial', 'B', 10)
+    #     pdf.write(5, "DECISION: this section CANNOT help you to learn the market skill: ")
+    #     pdf.set_font('Arial', 'B', 10)
+    #     pdf.write(5, str(df_skill_stats.iloc[skill_index]['Skill']))
+    #     pdf.set_font('Arial', '', 10)
+    #     pdf.ln(5)
+    #     pdf.write(5, "title cosine similarity score: " + str(title_scores[0][0]))
+    #     pdf.ln(5)
+    #     pdf.write(5, "skill bigram hits: " + str(skill_bigram_hits))
+    #     pdf.ln(5)
+    #     pdf.write(5, "unique buzzwords hit (out of 15): " + str(unique_buzzwords_hit))
+    #     pdf.ln(5)
+    #     pdf.write(5, "max semantic score of a single page: " + str(max_semantic_score))
+
+    # fill dataframe
+    # df_labeled_data.iloc[labeled_row_index]['Present (1) or Missing (0)'] = 0
+    # df_labeled_data.iloc[labeled_row_index]['Skill Bigram'] = skill_bigram
+    # df_labeled_data.iloc[labeled_row_index]['Course Book'] = course_book_title
+    # df_labeled_data.iloc[labeled_row_index]['Chapter Title'] = chapter_title
+    # df_labeled_data.iloc[labeled_row_index]['Title Cosine Score'] = title_scores[0][0]
+    # df_labeled_data.iloc[labeled_row_index]['Skill Bigram Hits'] = skill_bigram_hits
+    # df_labeled_data.iloc[labeled_row_index]['Unique Keywords Hit'] = unique_buzzwords_hit
+    # df_labeled_data.iloc[labeled_row_index]['Max Semantic Score'] = max_semantic_score
+
+    new_row = [0, str(df_skill_stats.iloc[skill_index]['Skill']), course_book_title, chapter_title, title_scores[0][0], skill_bigram_hits, unique_buzzwords_hit, total_buzzword_hits, max_semantic_score]
+    df_labeled_data.loc[len(df_labeled_data)] = new_row  # because of 0 indexing we can write to new row at len(df)
+
+
+###############################################################################################################
+    # pages = find_skill_pages(pdf_file, skill_bigram)
+    # for page in pages:
+    #     print("Page: ", page[0])
+    #     print("Sentence: ", page[1])
+
+    ######################## print to pdf #########################################################################
+    # indexer = 0
+    # for score in title_scores:
+    #     pdf.write(5, "Market Skill:")
+    #     pdf.ln(5)
+    #     pdf.set_font('Arial', 'B', 10)
+    #     pdf.write(5, df_job_skills.iloc[indexer]['Cluster Label'])
+    #     pdf.set_font('Arial', '', 10)
+    #     pdf.ln(5)
+    #     pdf.write(5, "The market skill '" + df_job_skills.iloc[indexer]['Cluster Label'] + "' is required in " + str( df_skill_stats.iloc[(np.where(df_skill_stats['Skill'] == df_job_skills.iloc[indexer]['Cluster Label'])[0][0])]['Hits'] ) + "% of " + job + " jobs")
+    #     pdf.write(5, "------------------------------------------------------------------------------------------------------------------------------")
+    #     pdf.ln(5)
+    #     indexer = indexer + 1
+
+
+    ##################################################################################################################
+# Python libraries
+from fpdf import FPDF
+from datetime import datetime, timedelta
+import os
+
+
+
+
+def create_title(text, pdf, page_index):
+    # Unicode is not yet supported in the py3k version; use windows-1252 standard font
+    if (page_index == 0):
+        pdf.set_font('Arial', '', 24)
+        pdf.ln(10)
+        pdf.write(5, f"Market Skills Report")
+        pdf.ln(20)
+        pdf.set_font('Arial', 'B', 16)
+        pdf.write(4, f'{"Chapter Title: " + text}')
+        pdf.ln(10)
+        pdf.set_font('Arial', '', 16)
+        pdf.write(4, f'{"Course Book Title: " + course_book_title}')
+
+    if (page_index > 0):
+        pdf.set_font('Arial', '', 24)
+        pdf.ln(10)
+        pdf.write(5, f'{"Job Title: " + text}')
+        pdf.ln(15)
+        pdf.set_font('Arial', '', 16)
+        pdf.write(4, f'{"Chapter Title: " + chapter_title + " (Pages " + str(start_page_inclusive) + " to " + str(end_page_inclusive) + ")"}')
+        pdf.ln(10)
+
+
+
+
+def create_analytics_report(chapter_title, filename, pages_analyzed, course_book_pdf, course_book_title):
+    pdf = FPDF()  # A4 (210 by 297 mm)
+
+    ''' First Page '''
+    # pdf.add_page()
+    # page_index = 0
+    # create_title(chapter_title, pdf, page_index)
+
+
+    # Create empty dataframe to store labeled data
+    labeled_row_index = 0
+    df_labeled_data = pd.DataFrame(
+        columns=['Present (1) or Missing (0)', 'Skill Bigram', 'Course Book', 'Chapter Title', 'Title Cosine Score',
+                 'Skill Bigram Hits', 'Unique Keywords Hit', 'Total Keyword Hits', 'Max Semantic Score'])
+
+    ''' First Job '''
+    inputExcelFile = "df_k_31_autonomous_vehicle_engineer_stats.xlsx"
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+    skill_number = 0
+    page_indexes = getnums(1, len(df_skill_stats['Skill']) + 1, 1)
+    for page_index in page_indexes:
+        #pdf.add_page()
+        #create_title('Autonomous Vehicle Engineer', pdf, page_index)
+        skill_name = df_skill_stats.iloc[skill_number]['Skill']
+        compare_skills('Autonomous Vehicle Engineer', chapter_title, pdf, pages_analyzed, skill_name, df_labeled_data, labeled_row_index)
+        skill_number = skill_number + 1
+        labeled_row_index = labeled_row_index + 1
+
+    # stuff
+
+    ''' Second Job '''
+    inputExcelFile = "df_k_31_computer_vision_engineer_stats.xlsx"
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+    skill_number = 0
+    page_indexes = getnums(33, len(df_skill_stats['Skill']) + 33, 1)
+    for page_index in page_indexes:
+        pdf.add_page()
+        create_title('Computer Vision Engineer', pdf, page_index)
+        skill_name = df_skill_stats.iloc[skill_number]['Skill']
+        compare_skills('Computer Vision Engineer', chapter_title, pdf, pages_analyzed, skill_name, df_labeled_data, labeled_row_index)
+        skill_number = skill_number + 1
+        labeled_row_index = labeled_row_index + 1
+
+    #
+    # # stuff
+    #
+    # ''' Third Job '''
+    inputExcelFile = "df_k_31_data_scientist_stats.xlsx"
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+    skill_number = 0
+    page_indexes = getnums(66, len(df_skill_stats['Skill']) + 66, 1)
+    for page_index in page_indexes:
+        pdf.add_page()
+        create_title('Data Scientist', pdf, page_index)
+        skill_name = df_skill_stats.iloc[skill_number]['Skill']
+        compare_skills('Data Scientist', chapter_title, pdf, pages_analyzed, skill_name, df_labeled_data, labeled_row_index)
+        skill_number = skill_number + 1
+        labeled_row_index = labeled_row_index + 1
+    # #
+    # # ''' Forth Job '''
+    inputExcelFile = "df_k_31_machine_learning_engineer_stats.xlsx"
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+    skill_number = 0
+    page_indexes = getnums(99, len(df_skill_stats['Skill']) + 99, 1)
+    for page_index in page_indexes:
+        pdf.add_page()
+        create_title('Machine Learning Engineer', pdf, page_index)
+        skill_name = df_skill_stats.iloc[skill_number]['Skill']
+        compare_skills('Machine Learning Engineer', chapter_title, pdf, pages_analyzed, skill_name, df_labeled_data, labeled_row_index)
+        skill_number = skill_number + 1
+        labeled_row_index = labeled_row_index + 1
+    # # #
+    # # # ''' Fifth Job '''
+    inputExcelFile = "df_k_31_python_developer_stats.xlsx"
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+    skill_number = 0
+    page_indexes = getnums(132, len(df_skill_stats['Skill']) + 132, 1)
+    for page_index in page_indexes:
+        pdf.add_page()
+        create_title('Python Developer', pdf, page_index)
+        skill_name = df_skill_stats.iloc[skill_number]['Skill']
+        compare_skills('Python Developer', chapter_title, pdf, pages_analyzed, skill_name, df_labeled_data, labeled_row_index)
+        skill_number = skill_number + 1
+        labeled_row_index = labeled_row_index + 1
+    # # #
+    # # # ''' Sixth Job '''
+    inputExcelFile = "df_k_31_robotics_engineer_stats.xlsx"
+    # Reading an excel file
+    excelFile = pd.read_excel(inputExcelFile)
+    # Converting excel file into CSV file
+    excelFile.to_csv("ResultCsvFile.csv", index=None, header=True)
+    # Reading and Converting the output csv file into a dataframe object
+    df_skill_stats = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+    skill_number = 0
+    page_indexes = getnums(165, len(df_skill_stats['Skill']) + 165, 1)
+    for page_index in page_indexes:
+        pdf.add_page()
+        create_title('Robotics Engineer', pdf, page_index)
+        skill_name = df_skill_stats.iloc[skill_number]['Skill']
+        compare_skills('Robotics Engineer', chapter_title, pdf, pages_analyzed, skill_name, df_labeled_data, labeled_row_index)
+        skill_number = skill_number + 1
+        labeled_row_index = labeled_row_index + 1
+
+    df_labeled_data.to_csv(course_book_title + " " + chapter_title + " labeled_data_2.csv", index=None, header=True)
+
+    #pdf.output(filename, 'F')
+
+course_book_titles = ['Architectures of Self Driving Cars', 'Architectures of Self Driving Cars', 'Industrial and Mobile Robots', 'Industrial and Mobile Robots', 'Machine Learning', 'NLP and Computer Vision', 'NLP and Computer Vision', 'Programming with Python', 'Programming with Python', 'Programming with Python', 'Programming with Python']
+chapter_titles = ['Environment Perception', 'Introduction', 'Control of Robots', 'Sensing and Perception', 'Clustering', 'Introduction to Computer Vision', 'Introduction to NLP', 'Introduction to Python', 'Python Important Libraries', 'Version Control', 'Working with Python']
+course_book_pdfs = ['Architectures of Self-Driving Vehicles.pdf', 'Architectures of Self-Driving Vehicles.pdf', 'Industrial and Mobile Robotics.pdf', 'Industrial and Mobile Robotics.pdf', 'Machine Learning.pdf', 'NLP and Computer Vision.pdf', 'NLP and Computer Vision.pdf', 'Programming with Python.pdf']
+start_pages = [31, 13, 127, 93, 29, 71, 13, 13, 75, 147, 129]
+end_pages = [55, 29, 143, 102, 65, 105, 41, 42, 127, 155, 145]
+
+# counter = 0
+# while counter < len(start_pages):
+#     course_book_title = course_book_titles[counter]
+#     chapter_title = chapter_titles[counter]
+#     start_page_inclusive = start_pages[counter]
+#     end_page_inclusive = end_pages[counter]
+#     course_book_pdf = course_book_pdfs[counter]
+#     interval = 1
+#     pages_analyzed = getnums(start_page_inclusive, end_page_inclusive + 1, interval)
+#     create_analytics_report(chapter_title, "Market Skills Report for Chapter '" + chapter_title + "'.pdf", pages_analyzed, course_book_pdf, course_book_title)
+#     counter = counter + 1
+
+course_book_title = 'Programming with Python'
+start_page_inclusive = 129
+end_page_inclusive = 145
+interval = 1
+pages_analyzed = getnums(start_page_inclusive, end_page_inclusive + 1, interval)
+chapter_title = 'Working with Python'
+print("Pages Being Analyzed: " + str(pages_analyzed))
+print("")
+course_book_pdf = 'Programming with Python.pdf'
+create_analytics_report(chapter_title, "Market Skills Report for Chapter '" + chapter_title + "'.pdf", pages_analyzed, course_book_pdf, course_book_title)
