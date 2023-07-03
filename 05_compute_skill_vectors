@@ -1,0 +1,97 @@
+import pandas as pd
+import numpy as np
+import math
+
+# 'df_k_31_autonomous_vehicle_engineer_with_cluster_labels.xlsx'
+# 'df_k_31_computer_vision_engineer_with_cluster_labels.xlsx'
+# 'df_k_31_data_scientist_with_cluster_labels.xlsx'
+# 'df_k_31_machine_learning_engineer_with_cluster_labels.xlsx'
+# 'df_k_31_python_developer_with_cluster_labels.xlsx'
+# 'df_k_31_robotics_engineer_with_cluster_labels.xlsx'
+
+############################# read in job skills ###########################################
+inputExcelFile ="df_k_31_robotics_engineer_with_cluster_labels.xlsx"
+
+# Reading an excel file
+excelFile = pd.read_excel (inputExcelFile)
+
+# Converting excel file into CSV file
+excelFile.to_csv("ResultCsvFile.csv", index = None, header=True)
+
+# Reading and Converting the output csv file into a dataframe object
+df_job_skills = pd.DataFrame(pd.read_csv("ResultCsvFile.csv"))
+
+
+##################################################################################
+# need to store cluster labels and string that is closest to cluster mean
+df_cluster_means = pd.DataFrame(columns=['Cluster ID', 'Mean Sentence', 'Cluster Label'])
+df_cluster_means['Cluster ID'] = df_job_skills['cluster_k31_full'].unique()
+cluster_labels = []
+row = 0
+cluster = 0
+while row < len(df_job_skills['cluster_k31_full']):
+    if (df_job_skills.iloc[row]['cluster_k31_full'] == cluster):
+        cluster_labels.append(df_job_skills.iloc[row]['cluster_k31_full_str'])
+        cluster = cluster + 1
+    row = row + 1
+df_cluster_means['Cluster Label'] = cluster_labels
+#print(df_cluster_means)
+
+# sentences closest to cluster means
+# Making an array of means of all umap embeddings in cluster
+closest_sentences = []
+for cluster in df_cluster_means['Cluster ID']:
+    #print(cluster)
+    min_distance = 1000
+    closest_sentence = 'this is just to start'
+    umap_1_list =[]
+    umap_2_list = []
+    row = 0
+    while row < len(df_job_skills['cluster_k31_full']):
+        #print(row)
+        #row = row + 1
+        #print(df_job_skills.iloc[row]['cluster_k31_full'])
+        if (df_job_skills.iloc[row]['cluster_k31_full'] == cluster):
+            #print(df_job_skills.iloc[row]['Skills'])
+            umap_1_list.append(df_job_skills.iloc[row]['umap1_all_distilroberta_v1'])
+            umap_2_list.append(df_job_skills.iloc[row]['umap2_all_distilroberta_v1'])
+        row = row + 1
+    arr_umap_1 = np.array(umap_1_list)
+    arr_umap_2 = np.array(umap_2_list)
+    mean_umap_1 = arr_umap_1.mean()
+    mean_umap_2 = arr_umap_2.mean()
+    # print(mean_umap_1)
+    # print(mean_umap_2)
+    # find sentence closest to mean
+    row = 0
+    while row < len(df_job_skills['cluster_k31_full']):
+        if (df_job_skills.iloc[row]['cluster_k31_full'] == cluster):
+            distance_new = math.sqrt( ((df_job_skills.iloc[row]['umap1_all_distilroberta_v1'] - mean_umap_1)**2) + ((df_job_skills.iloc[row]['umap2_all_distilroberta_v1'] - mean_umap_2)**2) )
+            if (distance_new < min_distance):
+                min_distance = distance_new
+                closest_sentence = df_job_skills.iloc[row]['Skills']
+        row = row + 1
+    #print(closest_sentence)
+    closest_sentences.append(closest_sentence)
+    #print(closest_sentences)
+df_cluster_means['Mean Sentence'] = closest_sentences
+print(df_cluster_means.to_string())
+
+if (inputExcelFile == "df_k_31_autonomous_vehicle_engineer_with_cluster_labels.xlsx"):
+    df_cluster_means.to_csv('df_k_31_autonomous_vehicle_engineer_with_mean_sentences.csv')
+    print("done")
+if (inputExcelFile == "df_k_31_computer_vision_engineer_with_cluster_labels.xlsx"):
+    df_cluster_means.to_csv('df_k_31_computer_vision_engineer_with_mean_sentences.csv')
+    print("done")
+if (inputExcelFile == "df_k_31_data_scientist_with_cluster_labels.xlsx"):
+    df_cluster_means.to_csv('df_k_31_data_scientist_with_mean_sentences.csv')
+    print("done")
+if (inputExcelFile == "df_k_31_machine_learning_engineer_with_cluster_labels.xlsx"):
+    df_cluster_means.to_csv('df_k_31_machine_learning_engineer_with_mean_sentences.csv')
+    print("done")
+if (inputExcelFile == "df_k_31_python_developer_with_cluster_labels.xlsx"):
+    df_cluster_means.to_csv('df_k_31_python_developer_with_mean_sentences.csv')
+    print("done")
+if (inputExcelFile == "df_k_31_robotics_engineer_with_cluster_labels.xlsx"):
+    df_cluster_means.to_csv('df_k_31_robotics_engineer_with_mean_sentences.csv')
+    print("done")
