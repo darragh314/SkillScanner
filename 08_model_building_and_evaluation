@@ -17,7 +17,7 @@ results_f = []
 for rate in learning_rates:
 
     # Load the data from the excel file
-    data = pd.read_excel("Labeled Data Trial 3 (167 pages).xlsx")
+    data = pd.read_excel("Labeled Data.xlsx")
 
     # Extract the features and target variable
     features = data.iloc[:, 4:9]
