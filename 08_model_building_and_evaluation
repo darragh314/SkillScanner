@@ -92,7 +92,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Load the data from the excel file
-data = pd.read_excel("labeled_data_250.xlsx")
+data = pd.read_excel("Labeled Data.xlsx")
 
 # Extract the features and target variable
 features = data.iloc[:, 4:9]
@@ -163,7 +163,7 @@ results_f = []
 for rate in learning_rates:
 
     # Load the data from the excel file
-    data = pd.read_excel("Labeled Data Trial 3 (167 pages).xlsx")
+    data = pd.read_excel("Labeled Data.xlsx")
 
     # Extract the features and target variable
     features = data.iloc[:, 4:9]
@@ -234,7 +234,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Load the data from the excel file
-data = pd.read_excel("labeled_data_250.xlsx")
+data = pd.read_excel("Labeled Data.xlsx")
 
 # Extract the features and target variable
 X = data.iloc[:, 4:9]
@@ -292,7 +292,7 @@ from keras.models import Sequential
 from keras.layers import Dense, SimpleRNN
 
 # Load the data from the excel file
-data = pd.read_excel("Labeled Data Trial 3 (167 pages).xlsx")
+data = pd.read_excel("Labeled Data.xlsx")
 
 # Extract the features and target variable
 features = data.iloc[:, 4:9]
@@ -373,7 +373,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 # Load the data from the excel file
-data = pd.read_excel("labeled_data_250.xlsx")
+data = pd.read_excel("Labeled Data.xlsx")
 
 # Extract the features and target variable
 features = data.iloc[:, 4:9]
@@ -433,46 +433,3 @@ accuracy = accuracy_score(y_test, y_pred)
 f_score = f1_score(y_test, y_pred)
 print("Accuracy sigmoid:", accuracy)
 print("F-score sigmoid:", f_score)
-
-
-
-
-#####################################3
-
-# Build the SVM model
-mechanisms = ['linear', 'poly', 'sigmoid']
-results_acc = []
-results_f = []
-for mechanism in mechanisms:
-    # Train the SVM model
-    svm_model = SVC(kernel=mechanism)
-    svm_model.fit(pca_components_train, y_train)
-
-    # Predict on test set
-    y_pred = svm_model.predict(pca_components_test)
-
-    # Calculate the accuracy and f-score of the classifier
-    accuracy = accuracy_score(y_test, y_pred)
-    f_score = f1_score(y_test, y_pred)
-    print("Mechanism:", mechanism)
-    print("Accuracy:", accuracy)
-    print("F-score:", f_score)
-    results_acc.append(accuracy)
-    results_f.append(f_score)
-
-# Plot the results
-fig, ax = plt.subplots()
-ax.plot(mechanisms, results_acc, 'bs', label='Accuracy')
-ax.plot(mechanisms, results_f, 'o',  color='orange', label='F-score')
-ax.set_ylim(0.6, 1.0)
-# Add values to the top of the bars
-for i, v in enumerate(results_acc):
-    ax.text(i - 0.1, v + 0.01, str(round(v, 3)))
-    ax.text(i - 0.1, results_f[i] - 0.02, str(round(results_f[i], 3)))
-    # Adjust the y-coordinate of the F-score text to prevent overlapping with Accuracy text
-
-# plt.title("Effect of Recurrence Mechanism on RNN Accuracy and F-score")
-plt.xlabel("SVM Kernal Function")
-plt.ylabel("Accuracy and F-score")
-plt.legend()
-plt.show()
