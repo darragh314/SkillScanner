@@ -1,4 +1,4 @@
-# thesis
+# Master Thesis: Darragh Carroll & Tim Schlippe
 Improving the learning experience by connecting learning material to the job market using NLP
 
 Code supporting our paper "Connecting Learning Material and the Demand of the Job Market Using Artificial Intelligence"
